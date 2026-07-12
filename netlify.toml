@@ -1,0 +1,9 @@
+[build]
+  command = "npx prisma generate && npx next build"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["node_modules/.prisma/**", "node_modules/@prisma/**", "node_modules/@libsql/**"]
