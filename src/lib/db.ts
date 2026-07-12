@@ -8,17 +8,10 @@ function createPrismaClient() {
   if (dbUrl.startsWith('libsql://')) {
     const libsql = createClient({ url: dbUrl })
     const adapter = new PrismaLibSQL(libsql)
-    return new PrismaClient({
-      adapter,
-      datasourceUrl: dbUrl,
-      log: process.env.NODE_ENV === 'development' ? ['query'] : [],
-    })
+    return new PrismaClient({ adapter })
   }
 
-  return new PrismaClient({
-    datasourceUrl: dbUrl,
-    log: process.env.NODE_ENV === 'development' ? ['query'] : [],
-  })
+  return new PrismaClient()
 }
 
 let _db: PrismaClient | null = null
