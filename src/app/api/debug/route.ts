@@ -1,18 +1,26 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { PrismaClient } from "@prisma/client";
+import { createClient } from "@libsql/client";
+import { PrismaLibSQL } from "@prisma/adapter-libsql";
 
 export async function GET() {
+  const dbUrl = process.env.DATABASE_URL || "";
+
   try {
-    const count = await db.image.count();
+    const libsql = createClient({ url: dbUrl });
+    const adapter = new PrismaLibSQL(libsql);
+    const prisma = new PrismaClient({ adapter });
+    const count = await prisma.image.count();
+
     return NextResponse.json({
       status: "OK",
-      database_url: process.env.DATABASE_URL ? "ADA" : "UNDEFINED",
+      prefix: dbUrl.substring(0, 30),
       image_count: count,
     });
   } catch (error: any) {
     return NextResponse.json({
       status: "ERROR",
-      database_url: process.env.DATABASE_URL ? "ADA" : "UNDEFINED",
+      prefix: dbUrl.substring(0, 30),
       error: error.message,
       code: error.code,
     });
