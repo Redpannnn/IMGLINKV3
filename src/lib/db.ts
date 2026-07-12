@@ -2,10 +2,6 @@ import { PrismaClient } from '@prisma/client'
 import { createClient } from '@libsql/client'
 import { PrismaLibSQL } from '@prisma/adapter-libsql'
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
-}
-
 function createPrismaClient() {
   const dbUrl = process.env.DATABASE_URL || 'file:./db/custom.db'
 
@@ -23,6 +19,11 @@ function createPrismaClient() {
   })
 }
 
-export const db = globalForPrisma.prisma ?? createPrismaClient()
+let _db: PrismaClient | null = null
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
+export const db = new Proxy({} as PrismaClient, {
+  get(_, prop) {
+    if (!_db) _db = createPrismaClient()
+    return (_db as any)[prop]
+  },
+})
