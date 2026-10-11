@@ -725,10 +725,12 @@ export default function HomePage() {
         const formData = new FormData();
         formData.append("file", file);
 
+        // Declared outside try so the catch block can also reference it.
+        const targetIndex = baseIndex + i;
+
         try {
           // Simulate progress
           let progress = 0;
-          const targetIndex = baseIndex + i;
           const progressInterval = setInterval(() => {
             progress = Math.min(progress + Math.random() * 30, 90);
             setUploadingFiles((prev) =>
