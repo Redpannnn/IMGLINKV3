@@ -15,7 +15,7 @@ import {
   FileImage,
   Search,
   LayoutGrid,
-  List,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +50,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { LoginPage } from "@/components/login-page";
 
 // Types
 interface ImageData {
@@ -662,6 +664,7 @@ function EmptyState({ onUploadClick }: { onUploadClick: () => void }) {
 // ---- Main Page ----
 export default function HomePage() {
   const { toast } = useToast();
+  const { isAuthenticated, isLoading: isAuthLoading, login, logout } = useAuth();
   const [images, setImages] = useState<ImageData[]>([]);
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -670,6 +673,21 @@ export default function HomePage() {
   const [deleteTarget, setDeleteTarget] = useState<ImageData | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const uploadSectionRef = useRef<HTMLDivElement>(null);
+  const prevAuthRef = useRef(false);
+  const manualLogoutRef = useRef(false);
+
+  // Show a toast when the session auto-expires (distinct from manual logout).
+  useEffect(() => {
+    if (prevAuthRef.current && !isAuthenticated && !manualLogoutRef.current) {
+      toast({
+        title: "Sesi berakhir",
+        description: "Kamu idle lebih dari 30 menit. Silakan login lagi.",
+        variant: "destructive",
+      });
+    }
+    manualLogoutRef.current = false;
+    prevAuthRef.current = isAuthenticated;
+  }, [isAuthenticated, toast]);
 
   // Fetch images on mount
   const fetchImages = useCallback(async () => {
@@ -687,12 +705,14 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     fetchImages();
-  }, [fetchImages]);
+  }, [fetchImages, isAuthenticated]);
 
   // Upload files
   const handleFilesSelected = useCallback(
     async (files: File[]) => {
+      const baseIndex = uploadingFiles.length;
       const newUploads: UploadingFile[] = files.map((file) => ({
         file,
         progress: 0,
@@ -708,11 +728,12 @@ export default function HomePage() {
         try {
           // Simulate progress
           let progress = 0;
+          const targetIndex = baseIndex + i;
           const progressInterval = setInterval(() => {
             progress = Math.min(progress + Math.random() * 30, 90);
             setUploadingFiles((prev) =>
               prev.map((u, idx) =>
-                idx === (uploadingFiles.length + i) ? { ...u, progress } : u
+                idx === targetIndex ? { ...u, progress } : u
               )
             );
           }, 100);
@@ -733,7 +754,7 @@ export default function HomePage() {
 
           setUploadingFiles((prev) =>
             prev.map((u, idx) =>
-              idx === (uploadingFiles.length + i)
+              idx === targetIndex
                 ? { ...u, progress: 100, status: "success", result: data }
                 : u
             )
@@ -746,7 +767,7 @@ export default function HomePage() {
 
           setUploadingFiles((prev) =>
             prev.map((u, idx) =>
-              idx === (uploadingFiles.length + i)
+              idx === targetIndex
                 ? { ...u, progress: 0, status: "error" }
                 : u
             )
@@ -820,6 +841,33 @@ export default function HomePage() {
   );
   const recentUploads = completedUploads.slice(-3);
 
+  // Auth gate — show login page when not authenticated
+  const handleLogout = useCallback(() => {
+    manualLogoutRef.current = true;
+    logout();
+    setImages([]);
+    setUploadingFiles([]);
+    setSearchQuery("");
+    setPreviewImage(null);
+    setDeleteTarget(null);
+    toast({
+      title: "Berhasil keluar",
+      description: "Kamu sudah logout dari ImgHost.",
+    });
+  }, [logout, toast]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={login} />;
+  }
+
   return (
     <TooltipProvider delayDuration={300}>
       <div className="min-h-screen flex flex-col bg-background">
@@ -855,6 +903,24 @@ export default function HomePage() {
                 <Upload className="h-4 w-4 mr-1.5" />
                 <span className="hidden sm:inline">Upload</span>
               </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleLogout}
+                      aria-label="Keluar"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span className="hidden sm:inline ml-1.5">Keluar</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Logout</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </header>
@@ -1025,16 +1091,6 @@ export default function HomePage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
-        {/* Download Project ZIP — FAB */}
-        <a
-          href="/project-v2.zip"
-          download="imghost-v2.zip"
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-4 py-3 shadow-lg hover:bg-primary/90 hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95"
-        >
-          <Download className="h-4 w-4" />
-          <span className="text-sm font-medium">Download ZIP</span>
-        </a>
       </div>
     </TooltipProvider>
   );
