@@ -28,7 +28,7 @@ export async function GET(
       const parts = rangeHeader.replace(/bytes=/, "").split("-");
       const start = parseInt(parts[0], 10);
       const end = parts[1] ? parseInt(parts[1], 10) : fileBuffer.length - 1;
-      const chunk = fileBuffer.slice(start, end + 1);
+      const chunk = fileBuffer.subarray(start, end + 1);
 
       return new NextResponse(chunk, {
         status: 206,
