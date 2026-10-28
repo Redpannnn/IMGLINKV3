@@ -51,7 +51,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { LoginPage } from "@/components/login-page";
+import { LoginPage } from "@/components/ui/login-page";
 
 // Types
 interface ImageData {
