@@ -73,6 +73,10 @@ interface UploadingFile {
   result?: ImageData;
 }
 
+// Files larger than this are uploaded in chunks, so each request stays below
+// the ~6MB request-body limit of serverless platforms (Netlify/Vercel).
+const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB
+
 // Utilities
 function formatFileSize(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -114,6 +118,67 @@ function getExtension(mimeType: string): string {
     "video/mp2t": "TS",
   };
   return map[mimeType] || "FILE";
+}
+
+async function readError(res: Response): Promise<string> {
+  try {
+    const data = await res.json();
+    return data?.error || `HTTP ${res.status}`;
+  } catch {
+    if (res.status === 413) {
+      return "File terlalu besar untuk satu request (limit platform hosting)";
+    }
+    return `HTTP ${res.status}`;
+  }
+}
+
+// Upload a large file in sequential chunks, reporting real progress.
+async function uploadChunked(
+  file: File,
+  onProgress: (pct: number) => void
+): Promise<ImageData> {
+  const initRes = await fetch("/api/upload/init", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      originalName: file.name,
+      mimeType: file.type,
+      size: file.size,
+    }),
+  });
+  if (!initRes.ok) throw new Error(await readError(initRes));
+
+  const { sessionId } = await initRes.json();
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+  try {
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = await file.slice(start, end).arrayBuffer();
+
+      const res = await fetch(
+        `/api/upload/chunk?sessionId=${encodeURIComponent(sessionId)}&index=${i}`,
+        { method: "POST", body: chunk }
+      );
+      if (!res.ok) throw new Error(await readError(res));
+
+      onProgress(Math.round(((i + 1) / totalChunks) * 100));
+    }
+
+    const doneRes = await fetch(
+      `/api/upload/chunk?sessionId=${encodeURIComponent(sessionId)}&done=1`,
+      { method: "POST" }
+    );
+    if (!doneRes.ok) throw new Error(await readError(doneRes));
+    return await doneRes.json();
+  } catch (error) {
+    // Best-effort cleanup so failed uploads don't leave orphan chunks
+    fetch(`/api/upload/chunk?sessionId=${encodeURIComponent(sessionId)}`, {
+      method: "DELETE",
+    }).catch(() => {});
+    throw error;
+  }
 }
 
 // ---- Upload Area Component ----
@@ -773,37 +838,47 @@ export default function HomePage() {
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const formData = new FormData();
-        formData.append("file", file);
-
         // Declared outside try so the catch block can also reference it.
         const targetIndex = baseIndex + i;
 
+        const setProgress = (progress: number) => {
+          setUploadingFiles((prev) =>
+            prev.map((u, idx) =>
+              idx === targetIndex ? { ...u, progress } : u
+            )
+          );
+        };
+
         try {
-          // Simulate progress
-          let progress = 0;
-          const progressInterval = setInterval(() => {
-            progress = Math.min(progress + Math.random() * 30, 90);
-            setUploadingFiles((prev) =>
-              prev.map((u, idx) =>
-                idx === targetIndex ? { ...u, progress } : u
-              )
-            );
-          }, 100);
+          let data: ImageData;
 
-          const res = await fetch("/api/upload", {
-            method: "POST",
-            body: formData,
-          });
+          if (file.size > CHUNK_SIZE) {
+            // Large files (e.g. video): chunked upload with real progress
+            data = await uploadChunked(file, setProgress);
+          } else {
+            // Small files: single request with simulated progress
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+              progress = Math.min(progress + Math.random() * 30, 90);
+              setProgress(progress);
+            }, 100);
 
-          clearInterval(progressInterval);
+            const formData = new FormData();
+            formData.append("file", file);
 
-          if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || "Upload failed");
+            const res = await fetch("/api/upload", {
+              method: "POST",
+              body: formData,
+            });
+
+            clearInterval(progressInterval);
+
+            if (!res.ok) {
+              throw new Error(await readError(res));
+            }
+
+            data = await res.json();
           }
-
-          const data = await res.json();
 
           setUploadingFiles((prev) =>
             prev.map((u, idx) =>
