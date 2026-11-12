@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import sharp from "sharp";
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_TYPES = [
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB
+const IMAGE_TYPES = [
   "image/jpeg",
   "image/png",
   "image/gif",
@@ -23,16 +24,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    if (!ALLOWED_TYPES.includes(file.type)) {
+    // Video: accept any "video/*" mime type (mp4, webm, mov, mkv, avi, etc.)
+    const isVideo = file.type.startsWith("video/");
+    const isImage = IMAGE_TYPES.includes(file.type);
+
+    if (!isImage && !isVideo) {
       return NextResponse.json(
-        { error: `File type not supported. Allowed: ${ALLOWED_TYPES.join(", ")}` },
+        { error: "File type not supported. Only images and videos are allowed." },
         { status: 400 }
       );
     }
 
-    if (file.size > MAX_FILE_SIZE) {
+    const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE;
+    if (file.size > maxSize) {
       return NextResponse.json(
-        { error: "File too large. Maximum size is 10MB" },
+        {
+          error: `File too large. Maximum size is ${
+            isVideo ? "50MB" : "10MB"
+          } for ${isVideo ? "video" : "image"}`,
+        },
         { status: 400 }
       );
     }
@@ -40,15 +50,17 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Get image dimensions using sharp
+    // Get image dimensions using sharp (images only, videos are skipped)
     let width: number | null = null;
     let height: number | null = null;
-    try {
-      const metadata = await sharp(buffer).metadata();
-      width = metadata.width ?? null;
-      height = metadata.height ?? null;
-    } catch {
-      // SVG or other formats may not have sharp support
+    if (!isVideo) {
+      try {
+        const metadata = await sharp(buffer).metadata();
+        width = metadata.width ?? null;
+        height = metadata.height ?? null;
+      } catch {
+        // SVG or other formats may not have sharp support
+      }
     }
 
     // Save to database (file data stored as BLOB)
@@ -76,7 +88,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Upload error:", error);
     return NextResponse.json(
-      { error: "Failed to upload image" },
+      { error: "Failed to upload file" },
       { status: 500 }
     );
   }
