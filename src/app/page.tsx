@@ -16,6 +16,7 @@ import {
   Search,
   LayoutGrid,
   LogOut,
+  Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -102,8 +103,17 @@ function getExtension(mimeType: string): string {
     "image/bmp": "BMP",
     "image/tiff": "TIFF",
     "image/avif": "AVIF",
+    "video/mp4": "MP4",
+    "video/webm": "WEBM",
+    "video/ogg": "OGV",
+    "video/quicktime": "MOV",
+    "video/x-msvideo": "AVI",
+    "video/x-matroska": "MKV",
+    "video/mpeg": "MPEG",
+    "video/3gpp": "3GP",
+    "video/mp2t": "TS",
   };
-  return map[mimeType] || "IMG";
+  return map[mimeType] || "FILE";
 }
 
 // ---- Upload Area Component ----
@@ -146,8 +156,8 @@ function UploadZone({
       setIsDragging(false);
       dragCounter.current = 0;
 
-      const files = Array.from(e.dataTransfer.files).filter((f) =>
-        f.type.startsWith("image/")
+      const files = Array.from(e.dataTransfer.files).filter(
+        (f) => f.type.startsWith("image/") || f.type.startsWith("video/")
       );
       if (files.length > 0) {
         onFilesSelected(files);
@@ -189,7 +199,7 @@ function UploadZone({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,video/*"
         multiple
         className="hidden"
         onChange={handleInputChange}
@@ -207,7 +217,7 @@ function UploadZone({
         </div>
         <div>
           <p className="text-base sm:text-lg font-semibold">
-            {isDragging ? "Lepaskan di sini!" : "Drag & drop foto ke sini"}
+            {isDragging ? "Lepaskan di sini!" : "Drag & drop foto atau video ke sini"}
           </p>
           <p className="text-sm text-muted-foreground mt-1">
             atau{" "}
@@ -235,9 +245,21 @@ function UploadZone({
           <Badge variant="secondary" className="text-xs">
             AVIF
           </Badge>
+          <Badge variant="secondary" className="text-xs">
+            MP4
+          </Badge>
+          <Badge variant="secondary" className="text-xs">
+            WEBM
+          </Badge>
+          <Badge variant="secondary" className="text-xs">
+            MOV
+          </Badge>
+          <Badge variant="secondary" className="text-xs">
+            MKV
+          </Badge>
         </div>
         <p className="text-xs text-muted-foreground/70">
-          Maksimal 10MB per file
+          Gambar maksimal 10MB · Video maksimal 50MB
         </p>
       </div>
     </div>
@@ -303,6 +325,7 @@ function ImageCard({
 }) {
   const [copied, setCopied] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const isVideo = image.mimeType.startsWith("video/");
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -323,7 +346,26 @@ function ImageCard({
         className="relative aspect-square overflow-hidden cursor-pointer bg-muted/50"
         onClick={() => onPreview(image)}
       >
-        {!imgError ? (
+        {imgError ? (
+          <div className="w-full h-full flex items-center justify-center">
+            <ImageIcon className="h-12 w-12 text-muted-foreground/30" />
+          </div>
+        ) : isVideo ? (
+          <>
+            <video
+              src={`${image.url}#t=0.1`}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 pointer-events-none"
+              preload="metadata"
+              muted
+              playsInline
+              tabIndex={-1}
+              onError={() => setImgError(true)}
+            />
+            <div className="absolute bottom-2 right-2 rounded-full bg-black/60 p-1.5">
+              <Play className="h-3 w-3 text-white" />
+            </div>
+          </>
+        ) : (
           <img
             src={image.url}
             alt={image.originalName}
@@ -331,10 +373,6 @@ function ImageCard({
             loading="lazy"
             onError={() => setImgError(true)}
           />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <ImageIcon className="h-12 w-12 text-muted-foreground/30" />
-          </div>
         )}
 
         {/* Overlay on hover */}
@@ -476,6 +514,14 @@ function PreviewDialog({
 
   if (!image) return null;
 
+  const isVideo = image.mimeType.startsWith("video/");
+  const htmlTag = isVideo
+    ? `<video src="${image.url}" controls></video>`
+    : `<img src="${image.url}" alt="${image.originalName}">`;
+  const markdownText = isVideo
+    ? image.url
+    : `![${image.originalName}](${image.url})`;
+
   const handleCopy = () => {
     onCopyLink(image);
     setCopied(true);
@@ -493,13 +539,22 @@ function PreviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl w-[95vw] p-0 gap-0 overflow-hidden">
         <div className="flex flex-col sm:flex-row">
-          {/* Image */}
+          {/* Image / Video */}
           <div className="flex-1 bg-black/5 flex items-center justify-center min-h-[300px] max-h-[70vh]">
-            <img
-              src={image.url}
-              alt={image.originalName}
-              className="max-w-full max-h-[70vh] object-contain"
-            />
+            {isVideo ? (
+              <video
+                src={image.url}
+                controls
+                autoPlay
+                className="max-w-full max-h-[70vh]"
+              />
+            ) : (
+              <img
+                src={image.url}
+                alt={image.originalName}
+                className="max-w-full max-h-[70vh] object-contain"
+              />
+            )}
           </div>
 
           {/* Info panel */}
@@ -535,7 +590,7 @@ function PreviewDialog({
             {/* Link URL */}
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
-                Link Gambar
+                Link File
               </label>
               <div className="flex items-center gap-1.5">
                 <div className="flex-1 bg-muted rounded-md px-2.5 py-1.5 text-xs truncate font-mono">
@@ -563,16 +618,14 @@ function PreviewDialog({
               </label>
               <div className="flex items-center gap-1.5">
                 <div className="flex-1 bg-muted rounded-md px-2.5 py-1.5 text-xs truncate font-mono">
-                  {`<img src="${image.url}" alt="${image.originalName}">`}
+                  {htmlTag}
                 </div>
                 <Button
                   size="icon"
                   variant="outline"
                   className="h-8 w-8 flex-shrink-0"
                   onClick={() => {
-                    navigator.clipboard.writeText(
-                      `<img src="${image.url}" alt="${image.originalName}">`
-                    );
+                    navigator.clipboard.writeText(htmlTag);
                   }}
                 >
                   <Copy className="h-3.5 w-3.5" />
@@ -587,16 +640,14 @@ function PreviewDialog({
               </label>
               <div className="flex items-center gap-1.5">
                 <div className="flex-1 bg-muted rounded-md px-2.5 py-1.5 text-xs truncate font-mono">
-                  {`![${image.originalName}](${image.url})`}
+                  {markdownText}
                 </div>
                 <Button
                   size="icon"
                   variant="outline"
                   className="h-8 w-8 flex-shrink-0"
                   onClick={() => {
-                    navigator.clipboard.writeText(
-                      `![${image.originalName}](${image.url})`
-                    );
+                    navigator.clipboard.writeText(markdownText);
                   }}
                 >
                   <Copy className="h-3.5 w-3.5" />
@@ -649,9 +700,9 @@ function EmptyState({ onUploadClick }: { onUploadClick: () => void }) {
       <div className="rounded-full bg-muted p-5 mb-4">
         <ImageIcon className="h-10 w-10 text-muted-foreground/50" />
       </div>
-      <h3 className="text-lg font-semibold mb-1">Belum ada foto</h3>
+      <h3 className="text-lg font-semibold mb-1">Belum ada file</h3>
       <p className="text-sm text-muted-foreground max-w-sm mb-6">
-        Upload foto pertamamu dan langsung dapat link-nya buat dipake di website manapun.
+        Upload foto atau video pertamamu dan langsung dapat link-nya buat dipake di website manapun.
       </p>
       <Button variant="outline" onClick={onUploadClick}>
         <Upload className="h-4 w-4 mr-2" />
@@ -810,7 +861,7 @@ export default function HomePage() {
       if (res.ok) {
         setImages((prev) => prev.filter((img) => img.id !== deleteTarget.id));
         toast({
-          title: "Foto dihapus",
+          title: "File dihapus",
           description: `${deleteTarget.originalName} berhasil dihapus.`,
         });
       } else {
@@ -819,7 +870,7 @@ export default function HomePage() {
     } catch {
       toast({
         title: "Gagal menghapus",
-        description: "Terjadi kesalahan saat menghapus foto.",
+        description: "Terjadi kesalahan saat menghapus file.",
         variant: "destructive",
       });
     } finally {
@@ -883,7 +934,7 @@ export default function HomePage() {
               <div>
                 <h1 className="text-lg font-bold leading-tight">ImgHost</h1>
                 <p className="text-[11px] text-muted-foreground leading-tight hidden sm:block">
-                  Image Hosting Pribadi
+                  Image & Video Hosting Pribadi
                 </p>
               </div>
             </div>
@@ -891,7 +942,7 @@ export default function HomePage() {
               {images.length > 0 && (
                 <Badge variant="secondary" className="text-xs font-medium">
                   <FileImage className="h-3 w-3 mr-1" />
-                  {images.length} foto
+                  {images.length} file
                 </Badge>
               )}
               <Button
@@ -1001,7 +1052,7 @@ export default function HomePage() {
                 <div className="relative flex-1 max-w-sm">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder="Cari foto..."
+                    placeholder="Cari foto atau video..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-9 h-9"
@@ -1029,7 +1080,7 @@ export default function HomePage() {
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Search className="h-10 w-10 text-muted-foreground/30 mb-3" />
                 <p className="text-sm text-muted-foreground">
-                  Tidak ada foto yang cocok dengan &quot;{searchQuery}&quot;
+                  Tidak ada file yang cocok dengan &quot;{searchQuery}&quot;
                 </p>
               </div>
             ) : (
@@ -1047,10 +1098,10 @@ export default function HomePage() {
         {/* Footer */}
         <footer className="border-t mt-auto">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
-            <p>ImgHost — Image hosting pribadi. Gambar aman, link selalu aktif.</p>
+            <p>ImgHost — Image & video hosting pribadi. File aman, link selalu aktif.</p>
             <p className="flex items-center gap-1">
               <LayoutGrid className="h-3 w-3" />
-              {images.length} gambar tersimpan
+              {images.length} file tersimpan
             </p>
           </div>
         </footer>
@@ -1074,10 +1125,10 @@ export default function HomePage() {
         >
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Hapus foto ini?</AlertDialogTitle>
+              <AlertDialogTitle>Hapus file ini?</AlertDialogTitle>
               <AlertDialogDescription>
-                Foto <strong>{deleteTarget?.originalName}</strong> akan dihapus
-                secara permanen. Link gambar yang sudah disalin sebelumnya tidak
+                File <strong>{deleteTarget?.originalName}</strong> akan dihapus
+                secara permanen. Link file yang sudah disalin sebelumnya tidak
                 akan bisa diakses lagi.
               </AlertDialogDescription>
             </AlertDialogHeader>
