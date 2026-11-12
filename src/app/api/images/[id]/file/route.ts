@@ -42,10 +42,11 @@ export async function GET(
       });
     }
 
-    return new NextResponse(fileBuffer, {
+        return new NextResponse(fileBuffer, {
       status: 200,
       headers: {
         "Content-Type": image.mimeType,
+        "Accept-Ranges": "bytes",
         "Cache-Control": "public, max-age=31536000, immutable",
         "Content-Length": fileBuffer.length.toString(),
       },
